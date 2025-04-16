@@ -1,11 +1,11 @@
+import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for all routes
+CORS(app)
 
-# Whitelisted APIs (base URLs only)
 ALLOWED_APIS = {
     "metaculus": "https://www.metaculus.com/api2",
     "example": "https://api.example.com"
@@ -28,3 +28,7 @@ def proxy(api_name, endpoint):
 @app.route("/")
 def index():
     return jsonify({"message": "CORS Proxy is running."})
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)

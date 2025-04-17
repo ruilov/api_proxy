@@ -9,6 +9,7 @@ CORS(app)
 ALLOWED_APIS = {
     "metaculus": "https://www.metaculus.com/api2",
     "fred": "https://api.stlouisfed.org/fred/series",
+    "cme": "https://data.nasdaq.com/api/v3/datatables/",
 }
 
 @app.route("/proxy/<api_name>/<path:endpoint>", methods=["GET"])

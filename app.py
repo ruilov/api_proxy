@@ -8,7 +8,7 @@ CORS(app)
 
 ALLOWED_APIS = {
     "metaculus": "https://www.metaculus.com/api2",
-    "example": "https://api.example.com"
+    "fred": "https://api.stlouisfed.org/fred/series",
 }
 
 @app.route("/proxy/<api_name>/<path:endpoint>", methods=["GET"])

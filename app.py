@@ -45,7 +45,65 @@ def _serialize_params():
     return serialized
 
 
-def _parse_barchart_close_series(csv_text):
+def _parse_float_field(value, field_name):
+    try:
+        return float(value)
+    except ValueError as exc:
+        raise ValueError(f"Barchart response contained a non-numeric {field_name} value") from exc
+
+
+def _parse_int_field(value, field_name):
+    try:
+        return int(value)
+    except ValueError as exc:
+        raise ValueError(f"Barchart response contained a non-numeric {field_name} value") from exc
+
+
+def _normalize_headered_barchart_row(row):
+    normalized = {}
+    for key, value in row.items():
+        if key is None:
+            continue
+        normalized[key] = value
+
+    for field in ("open", "high", "low", "close"):
+        value = normalized.get(field)
+        if value not in (None, ""):
+            normalized[field] = _parse_float_field(value, field)
+
+    for field in ("volume", "openInterest"):
+        value = normalized.get(field)
+        if value not in (None, ""):
+            normalized[field] = _parse_int_field(value, field)
+
+    if normalized.get("tradingDay"):
+        normalized["date"] = normalized["tradingDay"]
+
+    return normalized
+
+
+def _normalize_headerless_barchart_row(row):
+    if len(row) < 7:
+        raise ValueError("Barchart response row did not include the expected futures bar columns")
+
+    bar = {
+        "symbol": row[0],
+        "tradingDay": row[1],
+        "date": row[1],
+        "open": _parse_float_field(row[2], "open"),
+        "high": _parse_float_field(row[3], "high"),
+        "low": _parse_float_field(row[4], "low"),
+        "close": _parse_float_field(row[5], "close"),
+        "volume": _parse_int_field(row[6], "volume"),
+    }
+
+    if len(row) > 7 and row[7] != "":
+        bar["openInterest"] = _parse_int_field(row[7], "openInterest")
+
+    return bar
+
+
+def _parse_barchart_series(csv_text):
     rows = [row for row in csv.reader(StringIO(csv_text.strip())) if row]
     if not rows:
         raise ValueError("Barchart response did not contain any rows")
@@ -57,37 +115,16 @@ def _parse_barchart_close_series(csv_text):
         reader = csv.DictReader(StringIO(csv_text.strip()))
         series = []
         for row in reader:
-            trading_day = row.get("tradingDay")
-            close_value = row.get("close")
-            if not trading_day or close_value in (None, ""):
+            if not row:
                 raise ValueError("Barchart response contained an incomplete row")
-
-            try:
-                close_price = float(close_value)
-            except ValueError as exc:
-                raise ValueError("Barchart response contained a non-numeric close value") from exc
-
-            series.append({"date": trading_day, "close": close_price})
+            series.append(_normalize_headered_barchart_row(row))
         if not series:
             raise ValueError("Barchart response did not contain any rows")
         return series
 
     series = []
     for row in rows:
-        if len(row) < 6:
-            raise ValueError("Barchart response row did not include tradingDay and close columns")
-
-        trading_day = row[1]
-        close_value = row[5]
-        if not trading_day or close_value == "":
-            raise ValueError("Barchart response contained an incomplete row")
-
-        try:
-            close_price = float(close_value)
-        except ValueError as exc:
-            raise ValueError("Barchart response contained a non-numeric close value") from exc
-
-        series.append({"date": trading_day, "close": close_price})
+        series.append(_normalize_headerless_barchart_row(row))
 
     return series
 
@@ -145,7 +182,7 @@ def proxy_barchart():
         return _upstream_error(f"Barchart history request failed: {exc}")
 
     try:
-        series = _parse_barchart_close_series(history_response.text)
+        series = _parse_barchart_series(history_response.text)
     except ValueError as exc:
         return _upstream_error(f"Barchart response parsing failed: {exc}")
 

@@ -36,7 +36,7 @@ class AppTestCase(unittest.TestCase):
         )
 
     @patch("app.requests.Session")
-    def test_barchart_returns_close_series(self, mock_session_cls):
+    def test_barchart_returns_full_series(self, mock_session_cls):
         session = MagicMock()
         session.cookies.get.return_value = "token%20value"
         mock_session_cls.return_value = session
@@ -71,8 +71,28 @@ class AppTestCase(unittest.TestCase):
                     "maxrecords": "2",
                 },
                 "series": [
-                    {"date": "2026-03-17", "close": 67.5},
-                    {"date": "2026-03-18", "close": 68.1},
+                    {
+                        "symbol": "CLM26",
+                        "tradingDay": "2026-03-17",
+                        "date": "2026-03-17",
+                        "open": 67.1,
+                        "high": 68.0,
+                        "low": 66.8,
+                        "close": 67.5,
+                        "volume": 100,
+                        "openInterest": 200,
+                    },
+                    {
+                        "symbol": "CLM26",
+                        "tradingDay": "2026-03-18",
+                        "date": "2026-03-18",
+                        "open": 67.6,
+                        "high": 68.2,
+                        "low": 67.0,
+                        "close": 68.1,
+                        "volume": 120,
+                        "openInterest": 210,
+                    },
                 ],
             },
         )
@@ -140,8 +160,8 @@ class AppTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 502)
         self.assertIn("Barchart history request failed", response.get_json()["error"])
 
-    def test_parse_barchart_close_series_maps_trading_day_and_close(self):
-        series = app._parse_barchart_close_series(
+    def test_parse_barchart_series_supports_headerless_rows_with_open_interest(self):
+        series = app._parse_barchart_series(
             "CLM26,2026-02-05,63.2,63.59,61.78,62.44,1076990,2096168\n"
             "CLM26,2026-02-06,62.26,63.63,61.52,62.91,1249920,2072651\n"
         )
@@ -149,13 +169,65 @@ class AppTestCase(unittest.TestCase):
         self.assertEqual(
             series,
             [
-                {"date": "2026-02-05", "close": 62.44},
-                {"date": "2026-02-06", "close": 62.91},
+                {
+                    "symbol": "CLM26",
+                    "tradingDay": "2026-02-05",
+                    "date": "2026-02-05",
+                    "open": 63.2,
+                    "high": 63.59,
+                    "low": 61.78,
+                    "close": 62.44,
+                    "volume": 1076990,
+                    "openInterest": 2096168,
+                },
+                {
+                    "symbol": "CLM26",
+                    "tradingDay": "2026-02-06",
+                    "date": "2026-02-06",
+                    "open": 62.26,
+                    "high": 63.63,
+                    "low": 61.52,
+                    "close": 62.91,
+                    "volume": 1249920,
+                    "openInterest": 2072651,
+                },
             ],
         )
 
-    def test_parse_barchart_close_series_supports_headered_csv(self):
-        series = app._parse_barchart_close_series(
+    def test_parse_barchart_series_supports_headerless_rows_without_open_interest(self):
+        series = app._parse_barchart_series(
+            "CLM26,2026-03-17,67.1,68.0,66.8,67.5,100\n"
+            "CLM26,2026-03-18,67.6,68.2,67.0,68.1,120\n"
+        )
+
+        self.assertEqual(
+            series,
+            [
+                {
+                    "symbol": "CLM26",
+                    "tradingDay": "2026-03-17",
+                    "date": "2026-03-17",
+                    "open": 67.1,
+                    "high": 68.0,
+                    "low": 66.8,
+                    "close": 67.5,
+                    "volume": 100,
+                },
+                {
+                    "symbol": "CLM26",
+                    "tradingDay": "2026-03-18",
+                    "date": "2026-03-18",
+                    "open": 67.6,
+                    "high": 68.2,
+                    "low": 67.0,
+                    "close": 68.1,
+                    "volume": 120,
+                },
+            ],
+        )
+
+    def test_parse_barchart_series_supports_headered_csv(self):
+        series = app._parse_barchart_series(
             "symbol,timestamp,tradingDay,open,high,low,close,volume\n"
             "AAPL,2012-12-28T13:00:00-05:00,2012-12-28,15.4838,15.495,15.4572,15.4666,30871578\n"
             "AAPL,2012-12-28T14:00:00-05:00,2012-12-28,15.4661,15.4732,15.4342,15.4554,38476360\n"
@@ -164,8 +236,28 @@ class AppTestCase(unittest.TestCase):
         self.assertEqual(
             series,
             [
-                {"date": "2012-12-28", "close": 15.4666},
-                {"date": "2012-12-28", "close": 15.4554},
+                {
+                    "symbol": "AAPL",
+                    "timestamp": "2012-12-28T13:00:00-05:00",
+                    "tradingDay": "2012-12-28",
+                    "date": "2012-12-28",
+                    "open": 15.4838,
+                    "high": 15.495,
+                    "low": 15.4572,
+                    "close": 15.4666,
+                    "volume": 30871578,
+                },
+                {
+                    "symbol": "AAPL",
+                    "timestamp": "2012-12-28T14:00:00-05:00",
+                    "tradingDay": "2012-12-28",
+                    "date": "2012-12-28",
+                    "open": 15.4661,
+                    "high": 15.4732,
+                    "low": 15.4342,
+                    "close": 15.4554,
+                    "volume": 38476360,
+                },
             ],
         )
 
@@ -187,10 +279,16 @@ class AppTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 502)
         self.assertIn("Barchart response parsing failed", response.get_json()["error"])
 
-    def test_parse_barchart_close_series_rejects_non_numeric_close(self):
+    def test_parse_barchart_series_rejects_non_numeric_close(self):
         with self.assertRaisesRegex(ValueError, "non-numeric close"):
-            app._parse_barchart_close_series(
+            app._parse_barchart_series(
                 "CLM26,2026-02-05,63.2,63.59,61.78,abc,1076990,2096168\n"
+            )
+
+    def test_parse_barchart_series_rejects_non_numeric_volume(self):
+        with self.assertRaisesRegex(ValueError, "non-numeric volume"):
+            app._parse_barchart_series(
+                "CLM26,2026-02-05,63.2,63.59,61.78,62.44,abc,2096168\n"
             )
 
 

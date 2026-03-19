@@ -46,9 +46,8 @@ class AppTestCase(unittest.TestCase):
         history_response = MagicMock()
         history_response.raise_for_status.return_value = None
         history_response.text = (
-            "symbol,tradingDay,open,high,low,close,volume\n"
-            "CLM26,2026-03-17,67.1,68.0,66.8,67.5,100\n"
-            "CLM26,2026-03-18,67.6,68.2,67.0,68.1,120\n"
+            "CLM26,2026-03-17,67.1,68.0,66.8,67.5,100,200\n"
+            "CLM26,2026-03-18,67.6,68.2,67.0,68.1,120,210\n"
         )
         session.get.side_effect = [bootstrap_response, history_response]
 
@@ -143,16 +142,30 @@ class AppTestCase(unittest.TestCase):
 
     def test_parse_barchart_close_series_maps_trading_day_and_close(self):
         series = app._parse_barchart_close_series(
-            "close,tradingDay,volume\n"
-            "70.25,2026-03-18,100\n"
-            "71.50,2026-03-19,110\n"
+            "CLM26,2026-02-05,63.2,63.59,61.78,62.44,1076990,2096168\n"
+            "CLM26,2026-02-06,62.26,63.63,61.52,62.91,1249920,2072651\n"
         )
 
         self.assertEqual(
             series,
             [
-                {"date": "2026-03-18", "close": 70.25},
-                {"date": "2026-03-19", "close": 71.5},
+                {"date": "2026-02-05", "close": 62.44},
+                {"date": "2026-02-06", "close": 62.91},
+            ],
+        )
+
+    def test_parse_barchart_close_series_supports_headered_csv(self):
+        series = app._parse_barchart_close_series(
+            "symbol,timestamp,tradingDay,open,high,low,close,volume\n"
+            "AAPL,2012-12-28T13:00:00-05:00,2012-12-28,15.4838,15.495,15.4572,15.4666,30871578\n"
+            "AAPL,2012-12-28T14:00:00-05:00,2012-12-28,15.4661,15.4732,15.4342,15.4554,38476360\n"
+        )
+
+        self.assertEqual(
+            series,
+            [
+                {"date": "2012-12-28", "close": 15.4666},
+                {"date": "2012-12-28", "close": 15.4554},
             ],
         )
 
@@ -166,13 +179,19 @@ class AppTestCase(unittest.TestCase):
         bootstrap_response.raise_for_status.return_value = None
         history_response = MagicMock()
         history_response.raise_for_status.return_value = None
-        history_response.text = "symbol,tradeDate,lastPrice\nCLM26,2026-03-18,70.25\n"
+        history_response.text = "CLM26,2026-03-18,70.25\n"
         session.get.side_effect = [bootstrap_response, history_response]
 
         response = self.client.get("/proxy/barchart", query_string={"symbol": "CLM26"})
 
         self.assertEqual(response.status_code, 502)
         self.assertIn("Barchart response parsing failed", response.get_json()["error"])
+
+    def test_parse_barchart_close_series_rejects_non_numeric_close(self):
+        with self.assertRaisesRegex(ValueError, "non-numeric close"):
+            app._parse_barchart_close_series(
+                "CLM26,2026-02-05,63.2,63.59,61.78,abc,1076990,2096168\n"
+            )
 
 
 if __name__ == "__main__":

@@ -46,15 +46,40 @@ def _serialize_params():
 
 
 def _parse_barchart_close_series(csv_text):
-    reader = csv.DictReader(StringIO(csv_text.strip()))
-    if not reader.fieldnames or "tradingDay" not in reader.fieldnames or "close" not in reader.fieldnames:
-        raise ValueError("Barchart response did not include tradingDay and close columns")
+    rows = [row for row in csv.reader(StringIO(csv_text.strip())) if row]
+    if not rows:
+        raise ValueError("Barchart response did not contain any rows")
+
+    first_row = rows[0]
+    has_header = "tradingDay" in first_row and "close" in first_row
+
+    if has_header:
+        reader = csv.DictReader(StringIO(csv_text.strip()))
+        series = []
+        for row in reader:
+            trading_day = row.get("tradingDay")
+            close_value = row.get("close")
+            if not trading_day or close_value in (None, ""):
+                raise ValueError("Barchart response contained an incomplete row")
+
+            try:
+                close_price = float(close_value)
+            except ValueError as exc:
+                raise ValueError("Barchart response contained a non-numeric close value") from exc
+
+            series.append({"date": trading_day, "close": close_price})
+        if not series:
+            raise ValueError("Barchart response did not contain any rows")
+        return series
 
     series = []
-    for row in reader:
-        trading_day = row.get("tradingDay")
-        close_value = row.get("close")
-        if not trading_day or close_value in (None, ""):
+    for row in rows:
+        if len(row) < 6:
+            raise ValueError("Barchart response row did not include tradingDay and close columns")
+
+        trading_day = row[1]
+        close_value = row[5]
+        if not trading_day or close_value == "":
             raise ValueError("Barchart response contained an incomplete row")
 
         try:
@@ -63,9 +88,6 @@ def _parse_barchart_close_series(csv_text):
             raise ValueError("Barchart response contained a non-numeric close value") from exc
 
         series.append({"date": trading_day, "close": close_price})
-
-    if not series:
-        raise ValueError("Barchart response did not contain any rows")
 
     return series
 

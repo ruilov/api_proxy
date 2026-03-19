@@ -25,7 +25,7 @@ BARCHART_USER_AGENT = (
 
 
 def _build_barchart_overview_url(symbol):
-    return f"https://www.barchart.com/futures/quotes/{symbol}/overview"
+    return f"https://www.barchart.com/futures/quotes/{symbol}"
 
 
 def _get_forwarded_params():
